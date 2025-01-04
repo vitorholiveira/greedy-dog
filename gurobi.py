@@ -9,10 +9,9 @@ def solve_dog(instance: DogInstance):
     V = instance.gpu_vram
     v = []
     t = []
-    for key in instance.prn:
-        for vram in instance.prn[key]:
-            v.append(int(vram))
-            t.append(int(key))
+    for prn in instance.prns:
+        v.append(int(prn["vram"]))
+        t.append(int(prn["type"]))
 
     types = range(instance.prn_types_n)
 
