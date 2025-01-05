@@ -1,6 +1,7 @@
 from gurobipy import Model, GRB
 import matplotlib.pyplot as plt
 import csv
+from typing import List, Dict
 
 class GreedyDogSolver:
     def __init__(self, filename: str) -> None:
@@ -63,16 +64,18 @@ class GreedyDogSolver:
             self.gpus[gpu_index]['prns'].append(prn_index)
             self.gpus[gpu_index]['occupied_vram'] += prn['vram']
 
-        # Sort GPUs by occupied VRAM
-        self.gpus.sort(key=lambda gpu: gpu['occupied_vram'], reverse=True)
-
         self.mix_noloss()
+
+        self.mix_loss()
 
         self.print_gpus_info()
 
         self.plot_distribution()
     
     def mix_noloss(self) -> None:
+        # Sort GPUs by occupied VRAM
+        self.gpus.sort(key=lambda gpu: gpu['occupied_vram'], reverse=True)
+
         can_merge_gpus = lambda gpu1, gpu2: gpu1['occupied_vram'] + gpu2['occupied_vram'] <= self.gpu_vram
         new_gpus = [{'prns': [], 'occupied_vram': 0} for _ in range(self.gpu_n)]
         for gpu in self.gpus:
@@ -89,7 +92,35 @@ class GreedyDogSolver:
 
     
     def mix_loss(self) -> None:
-        self.gpus
+
+        def destroy() -> List[Dict[List[int], int]]:
+            self.gpus.sort(key=lambda gpu: gpu['occupied_vram'])
+            print(f'destroy: \n - {self.gpus[0]}\n - {self.gpus[1]}\n')
+            prns = self.gpus[0]['prns'] + self.gpus[1]['prns']
+            prns.sort(key=lambda prn_idx: self.prns[prn_idx]['vram'], reverse=True)
+            self.gpus.pop(0)
+            self.gpus.pop(0)
+            return prns
+        
+        def construct(prns):
+            new_gpus = [{'prns': [], 'occupied_vram': 0}]
+            for prn_idx in prns:
+                gpu_idx = 0
+                if self.prns[prn_idx]['vram'] + new_gpus[0]['occupied_vram'] >= self.gpu_vram:
+                    gpu_idx = 1
+                    if len(new_gpus) == 1:
+                        new_gpus.append({'prns': [], 'occupied_vram': 0})
+                new_gpus[gpu_idx]['prns'].append(prn_idx)
+                new_gpus[gpu_idx]['occupied_vram'] += self.prns[prn_idx]['vram']
+            self.gpus += new_gpus
+            print(f'construct: \n - {new_gpus[0]}\n - {new_gpus[1] if len(new_gpus) > 1 else None}\n')
+        
+        self.print_prns()
+
+        while len(self.gpus) > self.gpu_n:
+            print(f'num gpus: {len(self.gpus)}\n')
+            prns = destroy()
+            construct(prns)
 
     def optimize_gurobi(self, time_limit=1800) -> None:
         n = self.gpu_n
