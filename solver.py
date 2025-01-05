@@ -72,11 +72,12 @@ class GreedyDogSolver:
         for prn_index, prn in enumerate(self.prns):
             # Update GPU index if the PRN type changes
             if current_type != prn['type']:
-                gpu_index += 1
+                while len(self.gpus[gpu_index]['prns']) > 0:
+                    gpu_index += 1
+                    if gpu_index >= len(self.gpus):
+                        self.gpus.append({'prns': [], 'occupied_vram': 0})
                 current_type = prn['type']
                 start_index = gpu_index
-                if gpu_index >= len(self.gpus):
-                    self.gpus.append({'prns': [], 'occupied_vram': 0})
 
             gpu_index = start_index
 
@@ -92,8 +93,7 @@ class GreedyDogSolver:
             self.gpus[gpu_index]['occupied_vram'] += prn['vram']
 
         # Sort GPUs by occupied VRAM
-        #self.gpus.sort(key=lambda gpu: gpu['occupied_vram'])
-
+        self.gpus.sort(key=lambda gpu: gpu['occupied_vram'])
 
         self.print_gpu_info()
 
@@ -123,7 +123,7 @@ class GreedyDogSolver:
         print(f"Max GPU occupied VRAM: {max_occupied_vram['occupied_vram']} (Type distribution: {gpu_type_distribution(max_occupied_vram)})")
         print(f"Min GPU occupied VRAM: {min_occupied_vram['occupied_vram']} (Type distribution: {gpu_type_distribution(min_occupied_vram)})")
         print(f"Total GPU's occupied VRAM: {total_occupied_vram}")
-        print(f"Total GPU's occupied VRAM: {total_gpu_vram}\n")
+        print(f"Total GPU's VRAM: {total_gpu_vram}\n")
 
     def plot_distribution(self) -> None:
             """
@@ -161,6 +161,7 @@ class GreedyDogSolver:
             # Plot occupied VRAM
             ax2.bar(gpu_indices, occupied_vrams, color='lightgreen')
             ax2.axhline(y=self.gpu_vram, color='red', linestyle='--', label='VRAM Limit')
+            ax2.axvline(x=self.gpu_n-1, color='black', linestyle='--', label='Last Real GPU')
             ax2.set_title('Occupied VRAM per GPU')
             ax2.set_xlabel('GPU Index')
             ax2.set_ylabel('VRAM')
@@ -169,11 +170,10 @@ class GreedyDogSolver:
 
             # Plot number of PRN's
             ax3.bar(gpu_indices, number_prns, color='tomato')
-            ax3.set_title('Numer of PRN\'S per GPU')
+            ax3.set_title('Number of PRN\'S per GPU')
             ax3.set_xlabel('GPU Index')
             ax3.set_ylabel('Number of PRN\'s')
             ax3.grid(True, alpha=0.3)
-            ax3.legend()
 
             # Add overall title
             plt.suptitle(f'GPU Distribution Analysis - {self.filename}')
@@ -181,17 +181,6 @@ class GreedyDogSolver:
             # Adjust layout and display
             plt.tight_layout()
             plt.show()
-       # def destroy():
-       #     free_prns = self.gpus[:-1].prns
-       #     self.gpus[:-1].pop()
-        #    return free_prns
-
-
-       # def constroy(free_prns):
-        #    for prn in free_prns:
-#
-        #    return
-        #return
 
     def optimize_gurobi(self):
         # Parâmetros
