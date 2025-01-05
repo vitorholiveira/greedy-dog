@@ -1,11 +1,10 @@
 from gurobipy import Model, GRB
 import matplotlib.pyplot as plt
-import re
 import csv
 
 class GreedyDogSolver:
     def __init__(self, filename: str) -> None:
-        self.name = re.sub(r'\.txt$', '', filename)
+        self.name = filename.split('/')[-1].rsplit('.',1)[0]
         self.gpu_n = 0
         self.gpu_vram = 0
         self.prn_types_n = 0
@@ -43,6 +42,7 @@ class GreedyDogSolver:
         for prn_index, prn in enumerate(self.prns):
             # Update GPU index if the PRN type changes
             if current_type != prn['type']:
+                # Find empty GPU
                 while len(self.gpus[gpu_index]['prns']) > 0:
                     gpu_index += 1
                     if gpu_index >= len(self.gpus):
@@ -63,13 +63,34 @@ class GreedyDogSolver:
             self.gpus[gpu_index]['prns'].append(prn_index)
             self.gpus[gpu_index]['occupied_vram'] += prn['vram']
 
+        # Sort GPUs by occupied VRAM
+        self.gpus.sort(key=lambda gpu: gpu['occupied_vram'], reverse=True)
+
+        self.mix_noloss()
+
         self.print_gpus_info()
 
         self.plot_distribution()
-
-        # Sort GPUs by occupied VRAM
-        self.gpus.sort(key=lambda gpu: gpu['occupied_vram'])
     
+    def mix_noloss(self) -> None:
+        can_merge_gpus = lambda gpu1, gpu2: gpu1['occupied_vram'] + gpu2['occupied_vram'] <= self.gpu_vram
+        new_gpus = [{'prns': [], 'occupied_vram': 0} for _ in range(self.gpu_n)]
+        for gpu in self.gpus:
+            new_gpu_idx = 0
+            while not can_merge_gpus(gpu, new_gpus[new_gpu_idx]):
+                new_gpu_idx += 1
+                # Add a new GPU if necessary
+                if new_gpu_idx >= len(new_gpus):
+                    new_gpus.append({'prns': [], 'occupied_vram': 0})
+            
+            new_gpus[new_gpu_idx]['prns'] += gpu['prns']
+            new_gpus[new_gpu_idx]['occupied_vram'] += gpu['occupied_vram']
+        self.gpus = new_gpus
+
+    
+    def mix_loss(self) -> None:
+        self.gpus
+
     def optimize_gurobi(self, time_limit=1800) -> None:
         n = self.gpu_n
         m = self.prn_n
@@ -114,7 +135,7 @@ class GreedyDogSolver:
         print(f"Total type distribution: {model.ObjVal}")
 
         # Extract the solution and write to CSV
-        with open(f'solution_{self.name}.csv', 'w', newline='') as csvfile:
+        with open(f'gurobi_solutions/solution_{self.name}.csv', 'w', newline='') as csvfile:
             writer = csv.writer(csvfile)
             writer.writerow(['PRN Index', 'PRN VRAM', 'PRN Type', 'GPU Index'])
 
@@ -157,13 +178,6 @@ class GreedyDogSolver:
         print("Dog GPU's Info")
         print(self.name)
         print("=============================")
-        print(f"Max number of GPU's: {self.gpu_n}")
-        print(f"Actual number of GPU's: {len(self.gpus)}")
-
-        max_occupied_vram= max(self.gpus, key=lambda x: x['occupied_vram'])
-        min_occupied_vram = min(self.gpus, key=lambda x: x['occupied_vram'])
-        total_occupied_vram = sum(gpu['occupied_vram'] for gpu in self.gpus)
-        total_gpu_vram = len(self.gpus) * self.gpu_vram
 
         def gpu_type_distribution(gpu):
             types = []
@@ -178,11 +192,25 @@ class GreedyDogSolver:
                 sum += gpu_type_distribution(gpu)
             return sum
 
+
+        print(f"Sum of type distibution for all GPU\'s: {type_distribution_forall_gpus()}\n")
+        empty_gpus = 0
+        for gpu in self.gpus:
+            if len(gpu['prns']) == 0:
+                empty_gpus += 1
+
+        print(f"Number of extra GPU's: {len(self.gpus)-self.gpu_n}")
+        print(f"Number of empty GPU's: {empty_gpus}")
+
+        max_occupied_vram= max(self.gpus, key=lambda x: x['occupied_vram'])
+        min_occupied_vram = min(self.gpus, key=lambda x: x['occupied_vram'])
+        total_occupied_vram = sum(gpu['occupied_vram'] for gpu in self.gpus)
+        total_gpu_vram = len(self.gpus) * self.gpu_vram
+
         print(f"Max GPU occupied VRAM: {max_occupied_vram['occupied_vram']} (Type distribution: {gpu_type_distribution(max_occupied_vram)})")
         print(f"Min GPU occupied VRAM: {min_occupied_vram['occupied_vram']} (Type distribution: {gpu_type_distribution(min_occupied_vram)})")
         print(f"Total GPU's occupied VRAM: {total_occupied_vram}")
         print(f"Total GPU's VRAM: {total_gpu_vram}\n")
-        print(f"Sum of type distibution for all GPU\'s: {type_distribution_forall_gpus()}\n")
 
 
     def plot_distribution(self) -> None:
