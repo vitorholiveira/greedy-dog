@@ -1,9 +1,11 @@
 from gurobipy import Model, GRB
 import matplotlib.pyplot as plt
+import re
+import csv
 
 class GreedyDogSolver:
     def __init__(self, filename: str) -> None:
-        self.filename = filename
+        self.name = re.sub(r'\.txt$', '', filename)
         self.gpu_n = 0
         self.gpu_vram = 0
         self.prn_types_n = 0
@@ -17,6 +19,7 @@ class GreedyDogSolver:
                 self.gpu_vram = int(file.readline())
                 self.prn_types_n = int(file.readline())
                 self.prn_n = int(file.readline())
+                self.gpus = [{'prns': [], 'occupied_vram': 0} for _ in range(self.gpu_n)]
 
                 for i in range(self.prn_n):
                     row = file.readline()
@@ -28,40 +31,9 @@ class GreedyDogSolver:
                 self.prns.sort(key=lambda x: x['vram'], reverse=True)
                 self.prns.sort(key=lambda x: x['type'])
         except:
-            print(f"\ncan't read \"{filename}\"\n")
-
-    def print_instance_info(self) -> None:
-        print("\n=============================")
-        print("Dog Instance Info")
-        print(self.filename)
-        print("=============================")
-        print(f"Number of GPU's: {self.gpu_n}")
-        print(f"GPU's VRAM: {self.gpu_vram}")
-        print(f"Number of PRN's: {self.prn_n}")
-        print(f"Number of PRN's types: {self.prn_types_n}")
-
-        max_vram_prn = max(self.prns, key=lambda x: x['vram'])
-        min_vram_prn = min(self.prns, key=lambda x: x['vram'])
-        total_prn_vram = sum(prn['vram'] for prn in self.prns)
-        total_gpu_vram = self.gpu_n * self.gpu_vram
-
-        print(f"Max PRN VRAM: {max_vram_prn['vram']} (Type: {max_vram_prn['type']})")
-        print(f"Min PRN VRAM: {min_vram_prn['vram']} (Type: {min_vram_prn['type']})")
-        print(f"Total PRN's VRAM: {total_prn_vram}")
-        print(f"Total GPU's VRAM: {total_gpu_vram}\n")
-
-    def print_prns(self) -> None:
-        print("\n=============================")
-        print("PRN's VRAM by Type")
-        print(self.filename)
-        print("=============================")
-        for i, prn in enumerate(self.prns):
-            print(f"[{i}] : {prn}")
+            print(f"\nCan't read \"{filename}\"\n")
 
     def solve(self):
-        # Initialize GPUs with empty PRN lists and zero VRAM usage
-        self.gpus = [{'prns': [], 'occupied_vram': 0} for _ in range(self.gpu_n)]
-
         gpu_index = 0
         current_type = self.prns[0]['type']
         start_index = 0
@@ -98,11 +70,93 @@ class GreedyDogSolver:
         self.print_gpu_info()
 
         self.plot_distribution()
+    
+    def optimize_gurobi(self, time_limit=1800) -> None:
+        n = self.gpu_n
+        m = self.prn_n
+        V = self.gpu_vram
+        v = []
+        t = []
+        for prn in self.prns:
+            v.append(int(prn["vram"]))
+            t.append(int(prn["type"]))
+        types = range(self.prn_types_n)
 
-    def print_gpu_info(self) -> None:
+        model = Model(self.name)
+
+        x = model.addVars(n, m, vtype=GRB.BINARY, name="x")
+        y = model.addVars(n, len(types), vtype=GRB.BINARY, name="y")
+
+        # Objective Function: Total type distribution
+        model.setObjective(y.sum(), GRB.MINIMIZE)
+
+        # Constraint (1): Limits VRAM capacity
+        for i in range(n):
+            model.addConstr(sum(x[i, j] * v[j] for j in range(m)) <= V, name=f"VRAM_{i}")
+
+        # Constraint (2): Each PRN have to be processed by one GPU
+        for j in range(m):
+            model.addConstr(sum(x[i, j] for i in range(n)) == 1, name=f"AssignPRN_{j}")
+
+        # Constraint (3): x, y connection
+        for i in range(n):
+            for j in range(m):
+                prn_type_index = types.index(t[j])
+                model.addConstr(x[i, j] <= y[i, prn_type_index], name=f"Link_x_y_{i}_{j}")
+
+        model.setParam('TimeLimit', time_limit)
+        model.optimize()
+
+        if model.Status == GRB.OPTIMAL:
+            print("\nOptimal Solution Found:")
+        else:
+            print("\nOptimal solution not found.")
+
+        print(f"Total type distribution: {model.ObjVal}")
+
+        # Extract the solution and write to CSV
+        with open(f'solution_{self.name}.csv', 'w', newline='') as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerow(['PRN Index', 'PRN VRAM', 'PRN Type', 'GPU Index'])
+
+            for j in range(m):
+                for i in range(n):
+                    if x[i, j].X > 0.5:
+                        writer.writerow([j, v[j], t[j], i])
+                        break
+    
+    def print_instance_info(self) -> None:
+        print("\n=============================")
+        print("Dog Instance Info")
+        print(self.name)
+        print("=============================")
+        print(f"Number of GPU's: {self.gpu_n}")
+        print(f"GPU's VRAM: {self.gpu_vram}")
+        print(f"Number of PRN's: {self.prn_n}")
+        print(f"Number of PRN's types: {self.prn_types_n}")
+
+        max_vram_prn = max(self.prns, key=lambda x: x['vram'])
+        min_vram_prn = min(self.prns, key=lambda x: x['vram'])
+        total_prn_vram = sum(prn['vram'] for prn in self.prns)
+        total_gpu_vram = self.gpu_n * self.gpu_vram
+
+        print(f"Max PRN VRAM: {max_vram_prn['vram']} (Type: {max_vram_prn['type']})")
+        print(f"Min PRN VRAM: {min_vram_prn['vram']} (Type: {min_vram_prn['type']})")
+        print(f"Total PRN's VRAM: {total_prn_vram}")
+        print(f"Total GPU's VRAM: {total_gpu_vram}\n")
+
+    def print_prns(self) -> None:
+        print("\n=============================")
+        print("PRN's")
+        print(self.name)
+        print("=============================")
+        for i, prn in enumerate(self.prns):
+            print(f"[{i}] : {prn}")
+
+    def print_gpus_info(self) -> None:
         print("\n=============================")
         print("Dog GPU's Info")
-        print(self.filename)
+        print(self.name)
         print("=============================")
         print(f"Max number of GPU's: {self.gpu_n}")
         print(f"Actual number of GPU's: {len(self.gpus)}")
@@ -176,64 +230,8 @@ class GreedyDogSolver:
             ax3.grid(True, alpha=0.3)
 
             # Add overall title
-            plt.suptitle(f'GPU Distribution Analysis - {self.filename}')
+            plt.suptitle(f'GPU Distribution Analysis - {self.name}')
 
             # Adjust layout and display
             plt.tight_layout()
             plt.show()
-
-    def optimize_gurobi(self):
-        # Parâmetros
-        n = self.gpu_n
-        m = self.prn_n
-        V = self.gpu_vram
-        v = []
-        t = []
-        for prn in self.prns:
-            v.append(int(prn["vram"]))
-            t.append(int(prn["type"]))
-
-        types = range(self.prn_types_n)
-
-        model = Model("Dog")
-
-        x = model.addVars(n, m, vtype=GRB.BINARY, name="x")
-        y = model.addVars(n, len(types), vtype=GRB.BINARY, name="y")
-
-        # Função objetivo: minimizar o número de tipos de PRNs processados
-        model.setObjective(y.sum(), GRB.MINIMIZE)
-
-        # Restrição (1): Limite de capacidade de VRAM por GPU
-        for i in range(n):
-            model.addConstr(sum(x[i, j] * v[j] for j in range(m)) <= V, name=f"VRAM_{i}")
-
-        # Restrição (2): Cada PRN deve ser processada por exatamente uma GPU
-        for j in range(m):
-            model.addConstr(sum(x[i, j] for i in range(n)) == 1, name=f"AssignPRN_{j}")
-
-        # Restrição (3): Ligação entre x e y
-        for i in range(n):
-            for j in range(m):
-                prn_type_index = types.index(t[j])
-                model.addConstr(x[i, j] <= y[i, prn_type_index], name=f"Link_x_y_{i}_{j}")
-
-        model.setParam('TimeLimit', 60)
-
-        model.optimize()
-
-        if model.Status == GRB.OPTIMAL:
-            print("\nOptimal Solution Found:")
-            print(f"Custo total: {model.ObjVal}")
-
-            print("\nMin PRN\'s assignment by GPU:")
-            for i in range(n):
-                prns = [j for j in range(m) if x[i, j].X > 0.5]
-                print(f"GPU {i + 1}: PRNs {prns}")
-
-            print("\nNumber of PRN\'s types processed by GPU\'s:")
-            for i in range(n):
-                processed_types = [types[j] for j in range(len(types)) if y [i, j].X > 0.5]
-                print(f"GPU {i + 1}: ({len(processed_types)}) Types {processed_types} ")
-        else:
-            print("\nOptimal solution not found.")
-        return
