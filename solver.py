@@ -27,7 +27,6 @@ class GreedyDogSolver:
                     type, vram = int(parsed_row[0]), int(parsed_row[1])
                     self.prns.append({"type": type, "vram": vram})
 
-                # Ver se esse sort bombou
                 self.prns.sort(key=lambda x: x['vram'], reverse=True)
                 self.prns.sort(key=lambda x: x['type'])
         except:
@@ -64,12 +63,12 @@ class GreedyDogSolver:
             self.gpus[gpu_index]['prns'].append(prn_index)
             self.gpus[gpu_index]['occupied_vram'] += prn['vram']
 
-        # Sort GPUs by occupied VRAM
-        self.gpus.sort(key=lambda gpu: gpu['occupied_vram'])
-
-        self.print_gpu_info()
+        self.print_gpus_info()
 
         self.plot_distribution()
+
+        # Sort GPUs by occupied VRAM
+        self.gpus.sort(key=lambda gpu: gpu['occupied_vram'])
     
     def optimize_gurobi(self, time_limit=1800) -> None:
         n = self.gpu_n
@@ -160,7 +159,6 @@ class GreedyDogSolver:
         print("=============================")
         print(f"Max number of GPU's: {self.gpu_n}")
         print(f"Actual number of GPU's: {len(self.gpus)}")
-        print(f"GPU's VRAM: {self.gpu_vram}")
 
         max_occupied_vram= max(self.gpus, key=lambda x: x['occupied_vram'])
         min_occupied_vram = min(self.gpus, key=lambda x: x['occupied_vram'])
@@ -174,10 +172,18 @@ class GreedyDogSolver:
                     types.append(self.prns[prn_index]['type'])
             return len(types)
 
+        def type_distribution_forall_gpus():
+            sum = 0
+            for gpu in self.gpus:
+                sum += gpu_type_distribution(gpu)
+            return sum
+
         print(f"Max GPU occupied VRAM: {max_occupied_vram['occupied_vram']} (Type distribution: {gpu_type_distribution(max_occupied_vram)})")
         print(f"Min GPU occupied VRAM: {min_occupied_vram['occupied_vram']} (Type distribution: {gpu_type_distribution(min_occupied_vram)})")
         print(f"Total GPU's occupied VRAM: {total_occupied_vram}")
         print(f"Total GPU's VRAM: {total_gpu_vram}\n")
+        print(f"Sum of type distibution for all GPU\'s: {type_distribution_forall_gpus()}\n")
+
 
     def plot_distribution(self) -> None:
             """
