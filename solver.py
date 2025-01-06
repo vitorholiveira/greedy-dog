@@ -88,7 +88,7 @@ class GreedyDogSolver:
             self.gpus[gpu_index]['occupied_vram'] += prn['vram']
 
 
-    def initial_solution_steroids(self) -> None:
+    def enhanced_initial_solution(self) -> None:
         gpu_index = 0
         current_type = self.prns[0]['type']
         start_index = 0
