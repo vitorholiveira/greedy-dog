@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 import csv
 from typing import List, Dict
 import random
+import time
+import math
 
 class GreedyDogSolver:
     def __init__(self, filename: str) -> None:
@@ -22,7 +24,7 @@ class GreedyDogSolver:
                 self.prn_n = int(file.readline())
                 self.gpus = [{'prns': [], 'occupied_vram': 0} for _ in range(self.gpu_n)]
 
-                for i in range(self.prn_n):
+                for _ in range(self.prn_n):
                     row = file.readline()
                     parsed_row = row.strip().split('\t')
                     type, vram = int(parsed_row[0]), int(parsed_row[1])
@@ -30,23 +32,41 @@ class GreedyDogSolver:
 
                 self.prns.sort(key=lambda x: x['vram'], reverse=True)
                 self.prns.sort(key=lambda x: x['type'])
-        except:
-            print(f"\nCan't read \"{filename}\"\n")
+        except Exception as e:
+            self.name = None
+            raise RuntimeError(f"Error: Unable to read the file \"{filename}\". Details: {str(e)}")
 
-    def solve(self):
-        self.initial_solution()
+    def solve(self, output_file : str="output.txt", max_iterations : int=100000, temperature: float=1.0, seed: int=None, enhanced: bool=False, plot: bool=False):
+        if not hasattr(self, 'name') or self.name is None:
+            raise ValueError("Error: The instance file was not loaded. Please ensure the instance file is read before proceeding.")
 
-        # self.mix_noloss()
+        self.print_instance_info()
 
+        print("\nRunning initial solution...")
+        if enhanced:
+            self.enhanced_initial_solution()
+        else:
+            self.initial_solution()
         self.print_gpus_info()
 
-        self.plot_distribution()
+        if plot:
+            self.plot_distribution()
 
-        self.IG(200000)
-
+        print("\nRunning heuristic...")
+        start_time = time.time()
+        self.iterated_greedy(max_iterations=max_iterations, temperature=temperature, seed=seed)
+        end_time = time.time()
+        print(f"\nSeed: {self.seed}")
         self.print_gpus_info()
 
-        self.plot_distribution()
+        if plot:
+            self.plot_distribution()
+
+        self.save_solution(filename=output_file)
+
+        execution_time = end_time - start_time
+        print(f"\nExecution time: {execution_time:.2f} seconds\n")
+
 
     def initial_solution(self) -> None:
         fits_on_gpu = lambda gpu_idx, prn: self.gpus[gpu_idx]['occupied_vram'] + prn['vram'] <= self.gpu_vram
@@ -96,20 +116,36 @@ class GreedyDogSolver:
             # Assign the PRN to the GPU and update VRAM usage
             self.gpus[gpu_index]['prns'].append(prn_index)
             self.gpus[gpu_index]['occupied_vram'] += prn['vram']
+        
+        if(len(self.gpus) > self.gpu_n):
+            self.mix_noloss()
+            self.mix_loss()
 
-    def IG(self, max_iter) -> None:
-        def avaluate_solution(gpus, self) -> int:
-            def gpu_type_distribution(gpu):
-                types = []
-                for prn_index in gpu['prns']:
-                    if self.prns[prn_index]['type'] not in types:
-                        types.append(self.prns[prn_index]['type'])
-                return len(types)
+    def save_solution(self, filename: str) -> None:
+        with open(filename, 'w', newline='') as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerow(['PRN Index', 'PRN VRAM', 'PRN Type', 'GPU Index'])
 
-            value = 0
-            for gpu in gpus:
-                value += gpu_type_distribution(gpu)
-            return value
+            for i in range(len(self.gpus)):
+                for j in self.gpus[i]['prns']:
+                    writer.writerow([j, self.prns[j]['vram'], self.prns[j]['type'], i])
+
+    def avaluate_solution(self, gpus) -> int:
+        def gpu_type_distribution(gpu):
+            types = []
+            for prn_index in gpu['prns']:
+                if self.prns[prn_index]['type'] not in types:
+                    types.append(self.prns[prn_index]['type'])
+            return len(types)
+
+        value = 0
+        for gpu in gpus:
+            value += gpu_type_distribution(gpu)
+        return value
+    
+    def iterated_greedy(self, max_iterations:int=100000, temperature:float=1.0, seed:int=None) -> None:
+        self.seed = seed if seed is not None else random.randint(0, 2**32 - 1)
+        random.seed(self.seed)
 
         def destroy(self, gpus) -> List[int]:
             # Make a copy of gpus list to avoid modifying the original during random.choice
@@ -128,7 +164,7 @@ class GreedyDogSolver:
             
             # print(f'destroy: \n - {gpu1}\n - {gpu2}\n - {gpu3}\n')
             
-            current_solution = avaluate_solution([gpu1, gpu2, gpu3], self)
+            current_solution = self.avaluate_solution([gpu1, gpu2, gpu3])
             prns = gpu1['prns'] + gpu2['prns'] + gpu3['prns']
             
             # Remove selected GPUs from original list
@@ -139,10 +175,7 @@ class GreedyDogSolver:
             return prns, current_solution
 
         def construct(self, prns, gpus):
-            # Sort PRNs by type
             prns.sort(key=lambda prn_idx: self.prns[prn_idx]['type'])
-            # for prn_idx in prns:
-                # print(f'prn {prn_idx}: {self.prns[prn_idx]}')
             
             new_gpus = [{'prns': [], 'occupied_vram': 0}]
             
@@ -165,23 +198,34 @@ class GreedyDogSolver:
                 new_gpus[gpu_index]['prns'].append(prn_idx)
                 new_gpus[gpu_index]['occupied_vram'] += self.prns[prn_idx]['vram']
             
-            # print(f'construct: \n - {new_gpus[0]}\n - {new_gpus[1] if len(new_gpus) > 1 else None}\n - {new_gpus[2] if len(new_gpus) > 2 else None}\n')
-            new_value = avaluate_solution(new_gpus, self)
+            new_value = self.avaluate_solution(new_gpus)
             gpus += new_gpus
             return new_value, gpus
-            
-            
-        # Process each type separately
-        for i in range(0, max_iter):
-            gpus = self.gpus.copy()
-            print(f'iteration: {i}\n')
-            prns, current_slution = destroy(self, gpus)
-            print(f'current_solution: {current_slution}\n')
-            new_solution, gpus = construct(self, prns, gpus)
-            print(f'new_solution: {new_solution}\n')
+        
+        def accept_solution(delta, temperature):
+            probability = math.exp(-delta / temperature)
+            return random.random() < min(1, probability)
+        
+        current_solution_global = self.avaluate_solution(self.gpus)
+        best_solution = current_solution_global
+        best_gpus = self.gpus
 
-            if new_solution <= current_slution:
-                self.gpus = gpus
+        # Process each type separately
+        for _ in range(max_iterations):
+            gpus = self.gpus.copy()
+            prns, current_solution = destroy(self, gpus)
+            new_solution, gpus = construct(self, prns, gpus)
+            
+            delta = new_solution - current_solution
+            
+            if len(gpus) <= self.gpu_n and accept_solution(delta, temperature):
+                current_solution_global = current_solution_global - current_solution + new_solution
+                self.gpus = gpus 
+                if(current_solution_global < best_solution):
+                    best_solution = current_solution_global
+                    best_gpus = gpus
+
+        self.gpus = best_gpus
 
 
     def mix_noloss(self) -> None:
@@ -196,8 +240,6 @@ class GreedyDogSolver:
 
             new_gpu_idx = 0
             while not can_merge_gpus(gpu, new_gpus[new_gpu_idx]):
-                print(f'gpu: {gpu}, new_gpu: {new_gpus[new_gpu_idx]}, vram: {self.gpu_vram}')
-
                 new_gpu_idx += 1
                 # Add a new GPU if necessary
                 if new_gpu_idx >= len(new_gpus):
@@ -210,11 +252,8 @@ class GreedyDogSolver:
 
     
     def mix_loss(self) -> None:
-        print('makinig mix_loss')
-
         def destroy() -> List[Dict[List[int], int]]:
             self.gpus.sort(key=lambda gpu: gpu['occupied_vram'])
-            print(f'destroy: \n - {self.gpus[0]}\n - {self.gpus[1]}\n')
             prns = self.gpus[0]['prns'] + self.gpus[1]['prns']
             prns.sort(key=lambda prn_idx: self.prns[prn_idx]['vram'], reverse=True)
             self.gpus.pop(0)
@@ -226,74 +265,70 @@ class GreedyDogSolver:
             for prn_idx in prns:
                 gpu_idx = 0
                 if self.prns[prn_idx]['vram'] + new_gpus[0]['occupied_vram'] >= self.gpu_vram:
-                    gpu_idx = 1
-                    if len(new_gpus) == 1:
+                    gpu_idx += 1
+                    if len(new_gpus) >= 1:
                         new_gpus.append({'prns': [], 'occupied_vram': 0})
                 new_gpus[gpu_idx]['prns'].append(prn_idx)
                 new_gpus[gpu_idx]['occupied_vram'] += self.prns[prn_idx]['vram']
             self.gpus += new_gpus
-            print(f'construct: \n - {new_gpus[0]}\n - {new_gpus[1] if len(new_gpus) > 1 else None}\n')
-        
-        self.print_prns()
 
         while len(self.gpus) > self.gpu_n:
-            print(f'num gpus: {len(self.gpus)}\n')
             prns = destroy()
             construct(prns)
+    
+    def optimize_gurobi(self, time_limit=1800) -> None:
+        n = self.gpu_n
+        m = self.prn_n
+        V = self.gpu_vram
+        v = []
+        t = []
+        for prn in self.prns:
+            v.append(int(prn["vram"]))
+            t.append(int(prn["type"]))
+        types = range(self.prn_types_n)
 
-    # def optimize_gurobi(self, time_limit=1800) -> None:
-    #     n = self.gpu_n
-    #     m = self.prn_n
-    #     V = self.gpu_vram
-    #     v = []
-    #     t = []
-    #     for prn in self.prns:
-    #         v.append(int(prn["vram"]))
-    #         t.append(int(prn["type"]))
-    #     types = range(self.prn_types_n)
+        model = Model(self.name)
 
-    #     model = Model(self.name)
+        x = model.addVars(n, m, vtype=GRB.BINARY, name="x")
+        y = model.addVars(n, len(types), vtype=GRB.BINARY, name="y")
 
-    #     x = model.addVars(n, m, vtype=GRB.BINARY, name="x")
-    #     y = model.addVars(n, len(types), vtype=GRB.BINARY, name="y")
+        # Objective Function: Total type distribution
+        model.setObjective(y.sum(), GRB.MINIMIZE)
 
-    #     # Objective Function: Total type distribution
-    #     model.setObjective(y.sum(), GRB.MINIMIZE)
+        # Constraint (1): Limits VRAM capacity
+        for i in range(n):
+            model.addConstr(sum(x[i, j] * v[j] for j in range(m)) <= V, name=f"VRAM_{i}")
 
-    #     # Constraint (1): Limits VRAM capacity
-    #     for i in range(n):
-    #         model.addConstr(sum(x[i, j] * v[j] for j in range(m)) <= V, name=f"VRAM_{i}")
+        # Constraint (2): Each PRN have to be processed by one GPU
+        for j in range(m):
+            model.addConstr(sum(x[i, j] for i in range(n)) == 1, name=f"AssignPRN_{j}")
 
-    #     # Constraint (2): Each PRN have to be processed by one GPU
-    #     for j in range(m):
-    #         model.addConstr(sum(x[i, j] for i in range(n)) == 1, name=f"AssignPRN_{j}")
+        # Constraint (3): x, y connection
+        for i in range(n):
+            for j in range(m):
+                prn_type_index = types.index(t[j])
+                model.addConstr(x[i, j] <= y[i, prn_type_index], name=f"Link_x_y_{i}_{j}")
 
-    #     # Constraint (3): x, y connection
-    #     for i in range(n):
-    #         for j in range(m):
-    #             prn_type_index = types.index(t[j])
-    #             model.addConstr(x[i, j] <= y[i, prn_type_index], name=f"Link_x_y_{i}_{j}")
+        model.setParam('TimeLimit', time_limit)
+        model.optimize()
 
-    #     model.setParam('TimeLimit', time_limit)
-    #     model.optimize()
+        if model.Status == GRB.OPTIMAL:
+            print("\nOptimal Solution Found:")
+        else:
+            print("\nOptimal solution not found.")
 
-    #     if model.Status == GRB.OPTIMAL:
-    #         print("\nOptimal Solution Found:")
-    #     else:
-    #         print("\nOptimal solution not found.")
+        print(f"Total type distribution: {model.ObjVal}")
 
-    #     print(f"Total type distribution: {model.ObjVal}")
+        # Extract the solution and write to CSV
+        with open(f'gurobi_solutions/solution_{self.name}.csv', 'w', newline='') as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerow(['PRN Index', 'PRN VRAM', 'PRN Type', 'GPU Index'])
 
-    #     # Extract the solution and write to CSV
-    #     with open(f'gurobi_solutions/solution_{self.name}.csv', 'w', newline='') as csvfile:
-    #         writer = csv.writer(csvfile)
-    #         writer.writerow(['PRN Index', 'PRN VRAM', 'PRN Type', 'GPU Index'])
-
-    #         for j in range(m):
-    #             for i in range(n):
-    #                 if x[i, j].X > 0.5:
-    #                     writer.writerow([j, v[j], t[j], i])
-    #                     break
+            for j in range(m):
+                for i in range(n):
+                    if x[i, j].X > 0.5:
+                        writer.writerow([j, v[j], t[j], i])
+                        break
     
     def print_instance_info(self) -> None:
         print("\n=============================")
@@ -349,19 +384,16 @@ class GreedyDogSolver:
             if len(gpu['prns']) == 0:
                 empty_gpus += 1
 
-        print(f"Number of extra GPU's: {len(self.gpus)-self.gpu_n}")
+        extra = len(self.gpus)-self.gpu_n
+
+        print(f"Number of extra GPU's: {extra if empty_gpus >= 0 else 0}")
         print(f"Number of empty GPU's: {empty_gpus}")
 
         max_occupied_vram= max(self.gpus, key=lambda x: x['occupied_vram'])
         min_occupied_vram = min(self.gpus, key=lambda x: x['occupied_vram'])
-        total_occupied_vram = sum(gpu['occupied_vram'] for gpu in self.gpus)
-        total_gpu_vram = len(self.gpus) * self.gpu_vram
 
         print(f"Max GPU occupied VRAM: {max_occupied_vram['occupied_vram']} (Type distribution: {gpu_type_distribution(max_occupied_vram)})")
-        print(f"Min GPU occupied VRAM: {min_occupied_vram['occupied_vram']} (Type distribution: {gpu_type_distribution(min_occupied_vram)})")
-        print(f"Total GPU's occupied VRAM: {total_occupied_vram}")
-        print(f"Total GPU's VRAM: {total_gpu_vram}\n")
-
+        print(f"Min GPU occupied VRAM: {min_occupied_vram['occupied_vram']} (Type distribution: {gpu_type_distribution(min_occupied_vram)})\n")
 
     def plot_distribution(self) -> None:
             """
