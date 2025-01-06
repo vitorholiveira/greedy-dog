@@ -1,4 +1,4 @@
-# from gurobipy import Model, GRB
+from gurobipy import Model, GRB
 import matplotlib.pyplot as plt
 import csv
 from typing import List, Dict
@@ -43,10 +43,6 @@ class GreedyDogSolver:
         self.plot_distribution()
 
         self.IG(200000)
-
-        # self.mix_noloss()
-
-        # self.mix_loss()
 
         self.print_gpus_info()
 
