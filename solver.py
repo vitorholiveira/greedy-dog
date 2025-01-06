@@ -7,7 +7,7 @@ import time
 import math
 
 class GreedyDogSolver:
-    def __init__(self, filename: str) -> None:
+    def __init__(self, filename:str) -> None:
         self.name = filename.split('/')[-1].rsplit('.',1)[0]
         self.gpu_n = 0
         self.gpu_vram = 0
@@ -36,7 +36,7 @@ class GreedyDogSolver:
             self.name = None
             raise RuntimeError(f"Error: Unable to read the file \"{filename}\". Details: {str(e)}")
 
-    def solve(self, output_file : str="output.txt", max_iterations : int=100000, temperature: float=1.0, seed: int=None, enhanced: bool=False, plot: bool=False):
+    def solve(self, output_file:str="output.txt", max_iterations:int=100000, temperature:float=1.0, seed:int=None, enhanced:bool=False, plot:bool=False) -> None:
         if not hasattr(self, 'name') or self.name is None:
             raise ValueError("Error: The instance file was not loaded. Please ensure the instance file is read before proceeding.")
 
@@ -47,6 +47,8 @@ class GreedyDogSolver:
             self.enhanced_initial_solution()
         else:
             self.initial_solution()
+
+        self.initial_solution_value = self.avaluate_solution(self.gpus)
         self.print_gpus_info()
 
         if plot:
@@ -64,8 +66,9 @@ class GreedyDogSolver:
 
         self.save_solution(filename=output_file)
 
-        execution_time = end_time - start_time
-        print(f"\nExecution time: {execution_time:.2f} seconds\n")
+        self.execution_time = end_time - start_time
+
+        print(f"\nExecution time: {self.execution_time:.2f} seconds\n")
 
 
     def initial_solution(self) -> None:
@@ -120,6 +123,54 @@ class GreedyDogSolver:
         if(len(self.gpus) > self.gpu_n):
             self.mix_noloss()
             self.mix_loss()
+    
+    def mix_noloss(self) -> None:
+        # Sort GPUs by occupied VRAM
+        self.gpus.sort(key=lambda gpu: gpu['occupied_vram'], reverse=True)
+
+
+        can_merge_gpus = lambda gpu1, gpu2: gpu1['occupied_vram'] + gpu2['occupied_vram'] <= self.gpu_vram
+        new_gpus = [{'prns': [], 'occupied_vram': 0} for _ in range(self.gpu_n)]
+
+        for gpu in self.gpus:
+
+            new_gpu_idx = 0
+            while not can_merge_gpus(gpu, new_gpus[new_gpu_idx]):
+                new_gpu_idx += 1
+                # Add a new GPU if necessary
+                if new_gpu_idx >= len(new_gpus):
+                    new_gpus.append({'prns': [], 'occupied_vram': 0})
+                
+            
+            new_gpus[new_gpu_idx]['prns'] += gpu['prns']
+            new_gpus[new_gpu_idx]['occupied_vram'] += gpu['occupied_vram']
+        self.gpus = new_gpus
+
+    
+    def mix_loss(self) -> None:
+        def destroy() -> List[Dict[List[int], int]]:
+            self.gpus.sort(key=lambda gpu: gpu['occupied_vram'])
+            prns = self.gpus[0]['prns'] + self.gpus[1]['prns']
+            prns.sort(key=lambda prn_idx: self.prns[prn_idx]['vram'], reverse=True)
+            self.gpus.pop(0)
+            self.gpus.pop(0)
+            return prns
+        
+        def construct(prns):
+            new_gpus = [{'prns': [], 'occupied_vram': 0}]
+            for prn_idx in prns:
+                gpu_idx = 0
+                if self.prns[prn_idx]['vram'] + new_gpus[0]['occupied_vram'] >= self.gpu_vram:
+                    gpu_idx += 1
+                    if len(new_gpus) >= 1:
+                        new_gpus.append({'prns': [], 'occupied_vram': 0})
+                new_gpus[gpu_idx]['prns'].append(prn_idx)
+                new_gpus[gpu_idx]['occupied_vram'] += self.prns[prn_idx]['vram']
+            self.gpus += new_gpus
+
+        while len(self.gpus) > self.gpu_n:
+            prns = destroy()
+            construct(prns)
 
     def save_solution(self, filename: str) -> None:
         with open(filename, 'w', newline='') as csvfile:
@@ -226,57 +277,9 @@ class GreedyDogSolver:
                     best_gpus = gpus
 
         self.gpus = best_gpus
-
-
-    def mix_noloss(self) -> None:
-        # Sort GPUs by occupied VRAM
-        self.gpus.sort(key=lambda gpu: gpu['occupied_vram'], reverse=True)
-
-
-        can_merge_gpus = lambda gpu1, gpu2: gpu1['occupied_vram'] + gpu2['occupied_vram'] <= self.gpu_vram
-        new_gpus = [{'prns': [], 'occupied_vram': 0} for _ in range(self.gpu_n)]
-
-        for gpu in self.gpus:
-
-            new_gpu_idx = 0
-            while not can_merge_gpus(gpu, new_gpus[new_gpu_idx]):
-                new_gpu_idx += 1
-                # Add a new GPU if necessary
-                if new_gpu_idx >= len(new_gpus):
-                    new_gpus.append({'prns': [], 'occupied_vram': 0})
-                
-            
-            new_gpus[new_gpu_idx]['prns'] += gpu['prns']
-            new_gpus[new_gpu_idx]['occupied_vram'] += gpu['occupied_vram']
-        self.gpus = new_gpus
-
+        self.best_solution_value = best_solution
     
-    def mix_loss(self) -> None:
-        def destroy() -> List[Dict[List[int], int]]:
-            self.gpus.sort(key=lambda gpu: gpu['occupied_vram'])
-            prns = self.gpus[0]['prns'] + self.gpus[1]['prns']
-            prns.sort(key=lambda prn_idx: self.prns[prn_idx]['vram'], reverse=True)
-            self.gpus.pop(0)
-            self.gpus.pop(0)
-            return prns
-        
-        def construct(prns):
-            new_gpus = [{'prns': [], 'occupied_vram': 0}]
-            for prn_idx in prns:
-                gpu_idx = 0
-                if self.prns[prn_idx]['vram'] + new_gpus[0]['occupied_vram'] >= self.gpu_vram:
-                    gpu_idx += 1
-                    if len(new_gpus) >= 1:
-                        new_gpus.append({'prns': [], 'occupied_vram': 0})
-                new_gpus[gpu_idx]['prns'].append(prn_idx)
-                new_gpus[gpu_idx]['occupied_vram'] += self.prns[prn_idx]['vram']
-            self.gpus += new_gpus
-
-        while len(self.gpus) > self.gpu_n:
-            prns = destroy()
-            construct(prns)
-    
-    def optimize_gurobi(self, time_limit=1800) -> None:
+    def optimize_gurobi(self, time_limit:int=1800) -> None:
         n = self.gpu_n
         m = self.prn_n
         V = self.gpu_vram
@@ -371,14 +374,8 @@ class GreedyDogSolver:
                     types.append(self.prns[prn_index]['type'])
             return len(types)
 
-        def type_distribution_forall_gpus():
-            sum = 0
-            for gpu in self.gpus:
-                sum += gpu_type_distribution(gpu)
-            return sum
 
-
-        print(f"Sum of type distibution for all GPU\'s: {type_distribution_forall_gpus()}\n")
+        print(f"Sum of type distibution for all GPU\'s: {self.avaluate_solution(self.gpus)}\n")
         empty_gpus = 0
         for gpu in self.gpus:
             if len(gpu['prns']) == 0:
