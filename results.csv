@@ -1,1 +1,8 @@
 Instance,Initial Solution,Best Solution,Temperature,Iterations,Execution Time,Enhanced
+dog_1,161,129,0.01,1000000,27.37,False
+dog_2,150,124,0.01,1000000,27.76,False
+dog_3,242,242,0.01,1000000,42.79,False
+dog_4,243,243,0.01,1000000,42.29,False
+dog_5,292,292,0.01,1000000,50.89,False
+dog_6,286,286,0.01,1000000,49.23,False
+dog_7,16,15,0.01,1000000,50.25,False
