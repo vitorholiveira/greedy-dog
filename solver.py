@@ -64,9 +64,9 @@ class GreedyDogSolver:
         if plot:
             self.plot_distribution()
 
-        self.save_solution(filename=output_file)
-
         self.execution_time = end_time - start_time
+
+        self.save_solution(filename=output_file, temperature=temperature, max_iterations=max_iterations)
 
         print(f"\nExecution time: {self.execution_time:.2f} seconds\n")
 
@@ -172,9 +172,14 @@ class GreedyDogSolver:
             prns = destroy()
             construct(prns)
 
-    def save_solution(self, filename: str) -> None:
+    def save_solution(self, filename:str, temperature:float, max_iterations:float) -> None:
         with open(filename, 'w', newline='') as csvfile:
             writer = csv.writer(csvfile)
+            writer.writerow([f'Initial Solution: {self.initial_solution_value}'])
+            writer.writerow([f'Best Solution: {self.best_solution_value}'])
+            writer.writerow([f'Temperature: {temperature}'])
+            writer.writerow([f'Iterations: {max_iterations}'])
+            writer.writerow([f'Execution Time: {self.execution_time}'])
             writer.writerow(['PRN Index', 'PRN VRAM', 'PRN Type', 'GPU Index'])
 
             for i in range(len(self.gpus)):
@@ -279,7 +284,7 @@ class GreedyDogSolver:
         self.gpus = best_gpus
         self.best_solution_value = best_solution
     
-    def optimize_gurobi(self, time_limit:int=1800) -> None:
+    def optimize_gurobi(self, output:str, time_limit:int=1800) -> None:
         n = self.gpu_n
         m = self.prn_n
         V = self.gpu_vram
@@ -323,8 +328,12 @@ class GreedyDogSolver:
         print(f"Total type distribution: {model.ObjVal}")
 
         # Extract the solution and write to CSV
-        with open(f'gurobi_solutions/solution_{self.name}.csv', 'w', newline='') as csvfile:
+        with open(output, 'w', newline='') as csvfile:
             writer = csv.writer(csvfile)
+            if model.Status == GRB.OPTIMAL:
+                writer.writerow([f'Solution: {model.ObjVal} (optimal)'])
+            else:
+                writer.writerow([f'Solution: {model.ObjVal}'])
             writer.writerow(['PRN Index', 'PRN VRAM', 'PRN Type', 'GPU Index'])
 
             for j in range(m):

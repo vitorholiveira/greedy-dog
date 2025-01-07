@@ -18,4 +18,4 @@ parser.add_argument("-t", "--time",
 args = parser.parse_args()
 
 dog = GreedyDogSolver(filename=args.instance)
-dog.optimize_glpk(output_file=args.output)
+dog.optimize_gurobi(output=args.output, time_limit=args.time)
