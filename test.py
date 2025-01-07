@@ -2,11 +2,11 @@ import csv
 from solver import GreedyDogSolver
 
 # Configuração
-temperatures = [0.01, 5, 10]
+temperatures = [0.01, 0.5, 1, 5, 10]
 seed = 42
 iterations = 1000000
-csv_file = 'results.csv'
-enhanced = False
+csv_file = 'results2.csv'
+enhanced = True
 
 # Inicializa o CSV com cabeçalho
 with open(csv_file, mode='w', newline='') as file:
