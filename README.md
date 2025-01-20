@@ -1,112 +1,91 @@
-# Documentação do GreedyDogSolver
+# GreedyDogSolver
 
-Uma classe Python para resolver problemas de DOG (distribuição ótima de GPU's) usando algoritmos gulosos e métodos de melhoria iterativa baseado ma meta-heurística Iterated Greedy Algorithm.
+A Python class for solving DOG (Optimal GPU Distribution) problems using greedy algorithms and iterative improvement methods based on the Iterated Greedy Algorithm meta-heuristic.
 
-## Como Executar
+## Project Overview
+- **Documentation**: A detailed explanation of the problem and algorithm implementation is available in `report.pdf` (in Portuguese)
+- **Problem Instances**: Sample problem instances are provided in the `instances` folder
+- **Implementation**: Written in Python 3.10.12
+- **Dependencies**: All required packages are listed in `requirements.txt`
 
-O programa pode ser executado de duas formas diferentes, usando o algoritmo guloso ou o otimizador Gurobi:
+## Running with Greedy Algorithm (GreedyDog)
 
-### Execução com Algoritmo Guloso
-
-Usando o script `runner_greedydog.py`:
-
-```bash
-python runner_greedydog.py <output> <instance> [opções]
-```
-
-#### Argumentos Obrigatórios
-
-- `output`: Caminho para o arquivo de saída onde a melhor solução será salva
-- `instance`: Caminho para o arquivo de instância do problema
-
-#### Opções
-
-- `-i, --iterations`: Número máximo de iterações (padrão: 100000)
-- `-t, --temperature`: Temperatura inicial para o solver (padrão: 0.3)
-- `-s, --seed`: Semente para geração de números aleatórios (padrão: None)
-- `-e, --enhanced`: Usar solução inicial aprimorada para melhorar o desempenho
-- `-p, --plot`: Plotar distribuição da solução inicial e final
-
-#### Exemplos de Uso
+Using the `runner_greedydog.py` script:
 
 ```bash
-# Execução básica
-python runner_greedydog.py output.csv instance.txt
-
-# Execução com parâmetros personalizados
-python runner_greedydog.py output.csv instance.txt -i 50000 -t 0.5 -s 42 -e -p
+python3 runner_greedydog.py <output> <instance> [options]
 ```
 
-### Execução com Gurobi
+### Required Arguments
 
-Usando o script `runner_gurobi.py`:
+- `output`: Path to the output file where the best solution will be saved
+- `instance`: Path to the problem instance file
+
+### Options
+
+- `-i, --iterations`: Maximum number of iterations (default: 100000)
+- `-t, --temperature`: Initial temperature for the solver (default: 0.3)
+- `-s, --seed`: Seed for random number generation (default: None)
+- `-e, --enhanced`: Use enhanced initial solution to improve performance
+- `-p, --plot`: Plot initial and final solution distribution
+
+### Usage Examples
 
 ```bash
-python runner_gurobi.py <output> <instance> [opções]
+# Basic execution
+python3 runner_greedydog.py output.csv instance.txt
+
+# Execution with custom parameters
+python3 runner_greedydog.py output.csv instance.txt -i 50000 -t 0.5 -s 42 -e -p
 ```
 
-#### Argumentos Obrigatórios
+## Running with Gurobi (Commercial Solver)
 
-- `output`: Caminho para o arquivo de saída onde a melhor solução será salva
-- `instance`: Caminho para o arquivo de instância do problema
-
-#### Opções
-
-- `-t, --time`: Limite de tempo para otimização em segundos (padrão: 100000)
-
-#### Exemplos de Uso
+Using the `runner_gurobi.py` script:
 
 ```bash
-# Execução básica
-python runner_gurobi.py output.csv instance.txt
-
-# Execução com limite de tempo personalizado (1 hora)
-python runner_gurobi.py output.csv instance.txt -t 3600
+python3 runner_gurobi.py <output> <instance> [options]
 ```
 
-## 
+### Required Arguments
 
-A classe `GreedyDogSolver` implementa algoritmos para atribuir PRNs (Nós de Processamento) a GPUs considerando restrições de VRAM e distribuição de tipos. O solucionador utiliza abordagens gulosas e de melhoria iterativa para encontrar alocações eficientes.
+- `output`: Path to the output file where the best solution will be saved
+- `instance`: Path to the problem instance file
 
-## Principais Recursos
+### Options
 
-- Carregamento de instâncias baseado em arquivo
-- Múltiplas estratégias de solução:
-  - Alocação gulosa básica
-  - Solução inicial aprimorada com agrupamento por tipo
-  - Melhoria iterativa com aceitação baseada em temperatura
-  - Otimização com Gurobi (solução exata)
-- Ferramentas de visualização e análise de soluções
-- Saída CSV para soluções
+- `-t, --time`: Time limit for optimization in seconds (default: 100000)
 
-## Métodos Principais
+### Usage Examples
 
-### Funcionalidades Principais
+```bash
+# Basic execution
+python3 runner_gurobi.py output.csv instance.txt
 
-- `__init__(filename)`: Inicializa o solucionador com instância do problema a partir do arquivo
-- `solve(...)`: Método principal de resolução com múltiplos parâmetros para personalização
-- `initial_solution()`: Método de alocação gulosa básica
-- `enhanced_initial_solution()`: Alocação inicial aprimorada com agrupamento por tipo
-- `iterated_greedy(...)`: Método de melhoria iterativa com Iterated Greedy Algorithm
-- `optimize_gurobi(...)`: Solução exata usando o solucionador Gurobi
+# Execution with custom time limit (1 hour)
+python3 runner_gurobi.py output.csv instance.txt -t 3600
+```
 
-### Métodos Auxiliares
+## Main Methods
 
-- `mix_noloss()`: Combina GPUs sem exceder limites de VRAM
-- `mix_loss()`: Une GPUs quando alguma perda de capacidade é aceitável
-- `avaluate_solution()`: Calcula a qualidade da solução baseada na distribuição de tipos
+### Core Features
 
-### Análise e Saída
+- `__init__(filename)`: Initializes the solver with problem instance from file
+- `solve(...)`: Main solving method with multiple parameters for customization
+- `initial_solution()`: Basic greedy allocation method
+- `enhanced_initial_solution()`: Enhanced initial allocation with type-based grouping
+- `iterated_greedy(...)`: Iterative improvement method using Iterated Greedy Algorithm
+- `optimize_gurobi(...)`: Exact solution using Gurobi solver
 
-- `save_solution()`: Exporta solução para arquivo CSV
-- `print_instance_info()`: Exibe detalhes da instância do problema
-- `print_gpus_info()`: Mostra informações atuais de alocação de GPU
-- `plot_distribution()`: Cria visualizações da solução atual
+### Helper Methods
 
-## Dependências
+- `mix_noloss()`: Combines GPUs without exceeding VRAM limits
+- `mix_loss()`: Merges GPUs when some capacity loss is acceptable
+- `avaluate_solution()`: Calculates solution quality based on type distribution
 
-- gurobipy (para otimização exata)
-- matplotlib (para visualização)
-- csv (para entrada/saída de arquivo)
-- random, time, math (para implementação do algoritmo)
+### Analysis and Output
 
+- `save_solution()`: Exports solution to CSV file
+- `print_instance_info()`: Displays problem instance details
+- `print_gpus_info()`: Shows current GPU allocation information
+- `plot_distribution()`: Creates visualizations of current solution
